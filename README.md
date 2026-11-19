@@ -4,7 +4,7 @@ A dreamy, browser-based 3D swimming exploration game. A drowned bazaar still glo
 
 Built for the **Manycore Aholo Global 3D AI Hackathon** ("Play in 3D, Create with Aholo"). Every major 3D model in the game (coral, shells, statues, archways, platforms, the five treasures and the player character) is generated with **Aholo Lux3D**.
 
-**Play it:** https://bencoy09.github.io/sunken-market/ (desktop or phone, no install)
+**Play it:** https://sunken-market.vercel.app/
 
 ## Gameplay
 
