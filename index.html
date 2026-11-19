@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Sunken Market — The Lost Kingdom</title>
+<style>
+  :root { --ink:#e8fbff; --glow:#8ff0ff; --gold:#ffd98a; --panel:rgba(6,40,55,.55); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overflow:hidden; background:#06242f; color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Georgia,serif; touch-action:none; user-select:none; }
+  canvas { display:block; position:fixed; inset:0; z-index:0; width:100%; height:100%; }
+  body > .overlay, body > #hud, body > #touch, body > #storyBeat { position:fixed; }
+
+  /* ---------- Overlays (start / win) ---------- */
+  .overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:24px; z-index:20; transition:opacity .8s;
+    background:radial-gradient(ellipse at 50% 40%, rgba(20,110,130,.55), rgba(3,22,32,.95) 70%); }
+  .overlay.hidden { opacity:0; pointer-events:none; }
+  h1 { font-size:clamp(2.4rem,8vw,5rem); font-weight:400; letter-spacing:.12em; margin:0 0 .2em;
+    text-shadow:0 0 30px rgba(120,240,255,.7); }
+  .sub { opacity:.8; max-width:30em; line-height:1.5; margin:0 0 1.6em; }
+  .controls { display:grid; grid-template-columns:auto auto; gap:.3em 1.2em; font-size:.9rem; opacity:.85; margin-bottom:1.8em; text-align:left; }
+  .controls b { color:var(--gold); font-weight:600; }
+  button.go { font:inherit; font-size:1.15rem; letter-spacing:.2em; padding:.8em 2.2em; color:var(--ink); cursor:pointer;
+    background:rgba(120,240,255,.12); border:1px solid rgba(160,245,255,.6); border-radius:999px;
+    box-shadow:0 0 24px rgba(120,240,255,.35); transition:.25s; }
+  button.go:hover:not(:disabled) { background:rgba(120,240,255,.3); box-shadow:0 0 40px rgba(120,240,255,.6); }
+  button.go:disabled { opacity:.4; cursor:wait; }
+  #loadinfo { margin-top:1.2em; font-size:.8rem; opacity:.6; min-height:1.2em; }
+
+  /* ---------- HUD ---------- */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:10; opacity:0; transition:opacity 1s; }
+  #hud.on { opacity:1; }
+  #journal { position:absolute; top:62px; left:14px; width:min(300px,calc(100vw - 120px)); pointer-events:auto; cursor:pointer; padding:12px 14px; background:var(--panel);
+    border:1px solid rgba(160,245,255,.3); border-radius:14px; backdrop-filter:blur(6px); font-size:.88rem; }
+  #journal h2 { margin:0 0 8px; font-size:.95rem; font-weight:400; letter-spacing:.2em; color:var(--glow); }
+  #journal ul { list-style:none; margin:0; padding:0; }
+  #journal li { margin:6px 0; line-height:1.3; opacity:.9; }
+  #journal li .nm { color:var(--gold); }
+  #journal li.done { opacity:.5; text-decoration:line-through; }
+  #journal li .hint { display:block; font-style:italic; opacity:.75; font-size:.8rem; }
+  #journal.collapsed ul { display:none; }
+  #compass { position:absolute; top:62px; right:14px; width:92px; text-align:center; font-size:.75rem; }
+  #compass .ring { width:64px; height:64px; margin:0 auto 4px; border-radius:50%; border:1px solid rgba(160,245,255,.45);
+    background:var(--panel); position:relative; }
+  #arrow { position:absolute; left:50%; top:50%; width:0; height:0; margin:-22px 0 0 -7px;
+    border-left:7px solid transparent; border-right:7px solid transparent; border-bottom:26px solid var(--gold);
+    transform-origin:7px 22px; filter:drop-shadow(0 0 6px var(--gold)); }
+  #toast { position:absolute; left:50%; bottom:18%; transform:translateX(-50%); padding:10px 22px; border-radius:999px;
+    background:var(--panel); border:1px solid rgba(255,217,138,.6); color:var(--gold); opacity:0; transition:opacity .5s; white-space:nowrap; }
+  #toast.on { opacity:1; }
+  #keys { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-size:.72rem; opacity:.5; white-space:nowrap; }
+
+  /* ---------- Touch controls ---------- */
+  #touch { display:none; position:fixed; inset:0; z-index:12; pointer-events:none; }
+  body.is-touch #touch { display:block; }
+  body.is-touch #keys { display:none; }
+  #stick { position:absolute; left:22px; bottom:26px; width:130px; height:130px; border-radius:50%; pointer-events:auto;
+    background:rgba(120,240,255,.1); border:1px solid rgba(160,245,255,.45); }
+  #nub { position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px; border-radius:50%;
+    background:rgba(160,245,255,.35); border:1px solid rgba(200,250,255,.8); }
+  .tbtn { position:absolute; right:22px; width:68px; height:68px; border-radius:50%; pointer-events:auto; font-size:1.6rem;
+    display:flex; align-items:center; justify-content:center; background:rgba(120,240,255,.14); border:1px solid rgba(160,245,255,.55); }
+  #btnUp { bottom:112px; } #btnDown { bottom:30px; }
+  .tbtn.held { background:rgba(160,245,255,.4); }
+
+  /* Story, profile and settings layer */
+  .glass-card{width:min(560px,94vw);max-height:88vh;overflow:auto;padding:24px;border:1px solid rgba(160,245,255,.35);border-radius:22px;background:linear-gradient(145deg,rgba(5,43,57,.96),rgba(3,19,31,.97));box-shadow:0 18px 70px #00131dcc;backdrop-filter:blur(14px)}
+  .eyebrow{color:var(--gold);letter-spacing:.22em;text-transform:uppercase;font:600 .72rem system-ui,sans-serif}
+  .glass-card h2{font-size:clamp(1.5rem,5vw,2.4rem);font-weight:400;margin:.45em 0}
+  .glass-card p{line-height:1.65;opacity:.88}
+  .field{display:block;text-align:left;margin:14px 0;color:#bfeef5;font: .85rem system-ui,sans-serif}
+  .field input,.field select{display:block;width:100%;margin-top:7px;padding:13px 14px;border-radius:12px;border:1px solid #6eb9c5;background:#071e2a;color:#effcff;font:1rem system-ui,sans-serif}
+  .action-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:18px}
+  .soft-btn{font:600 .9rem system-ui,sans-serif;padding:12px 17px;border-radius:999px;color:#e8fbff;background:#0d4656;border:1px solid #65c9d8}
+  .soft-btn.primary{background:#b17b35;color:#081b21;border-color:#f5d18a}
+  .chapter-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px;text-align:left}
+  .chapter{padding:14px;border-radius:14px;border:1px solid #316879;background:#082b39;color:#e8fbff;text-align:left}
+  .chapter:disabled{opacity:.42}
+  .chapter strong{display:block;color:#ffdb99;margin-bottom:5px}
+  .chapter small{display:block;line-height:1.4;opacity:.8}
+  .top-tools{position:absolute;top:12px;right:12px;display:flex;gap:8px;pointer-events:auto}
+  .tool-btn{pointer-events:auto;border:1px solid #8bd9e6;background:#062d3bce;color:#e8fbff;border-radius:999px;padding:9px 12px;font: .78rem system-ui,sans-serif}
+  #profileBadge{position:absolute;bottom:42px;right:14px;background:#062d3bcc;border:1px solid #6eb9c5;border-radius:999px;padding:7px 12px;font: .75rem system-ui,sans-serif}
+  #storyBeat{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;padding:18px;background:#00131dcc}
+  #storyBeat.show{display:flex}
+  body.is-touch #profileBadge{right:auto;left:22px;bottom:166px}
+  #fatal{position:fixed;left:12px;right:12px;top:70px;z-index:60;display:none;padding:14px 16px;border-radius:14px;background:#2a0f12f2;border:1px solid #ff9a86;color:#ffe3dc;font:.8rem/1.45 system-ui,sans-serif;pointer-events:auto;overflow-wrap:anywhere}
+  #fatal.show{display:block}
+  #fatal b{display:block;margin-bottom:6px;font-size:.9rem}
+  #fatal button{margin-top:10px;font:600 .85rem system-ui,sans-serif;padding:9px 16px;border-radius:999px;border:1px solid #ffb4a3;background:#5a1f22;color:#fff}
+  @media(max-width:520px){.glass-card{padding:19px}.chapter-grid{grid-template-columns:1fr}#profileBadge{bottom:14px;right:12px}}
+
+</style>
+</head>
+<body>
+
+<!-- ===== Start screen ===== -->
+<div id="start" class="overlay">
+  <h1>SUNKEN MARKET</h1>
+  <p class="sub">An ancient signal is calling from beneath the tide. Explore a forgotten civilisation, recover its memories and uncover why an entire kingdom vanished.</p>
+  <p id="welcomeLine" class="sub" style="margin-top:-1em;color:var(--gold)"></p>
+  <div class="controls">
+    <span><b>W A S D</b></span><span>swim</span>
+    <span><b>Mouse</b></span><span>look around</span>
+    <span><b>Space / Shift</b></span><span>rise / sink</span>
+    <span><b>J</b></span><span>journal &nbsp; <b>M</b> mute</span>
+  </div>
+  <button id="goBtn" class="go" disabled>LOADING…</button>
+  <div class="action-row"><button id="profileOpen" class="soft-btn">EXPLORER PROFILE</button><button id="chaptersOpen" class="soft-btn">STORY MAP</button><button id="settingsOpen" class="soft-btn">SETTINGS</button></div>
+  <div id="loadinfo"></div>
+</div>
+
+<!-- ===== Win screen ===== -->
+<div id="win" class="overlay hidden">
+  <h1>THE MARKET WAKES</h1>
+  <p class="sub" id="winText">All five treasures are restored. Lanterns bloom along the old stalls, and the tide hums a trading song again.</p>
+  <div class="action-row"><button id="nextChapter" class="soft-btn primary">UNLOCK NEXT CHAPTER</button><button class="soft-btn" onclick="location.reload()">RETURN TO SHORE</button></div>
+</div>
+
+
+<!-- Explorer profile -->
+<div id="profilePanel" class="overlay hidden" style="z-index:25">
+ <div class="glass-card">
+  <div class="eyebrow">Explorer identity</div><h2>Your journey begins with a name.</h2>
+  <p>Create a local explorer profile. Your name and progress are saved on this device/browser.</p>
+  <label class="field">Explorer name<input id="playerName" maxlength="18" placeholder="e.g. Tidewalker" autocomplete="nickname"></label>
+  <label class="field">Choose your emblem<select id="playerEmblem"><option value="🐚">🐚 Shell Keeper</option><option value="🧭">🧭 Wayfinder</option><option value="🪼">🪼 Deep Diver</option><option value="🐠">🐠 Reef Friend</option></select></label>
+  <div class="action-row"><button id="saveProfile" class="soft-btn primary">SAVE PROFILE</button><button class="soft-btn closePanel" data-panel="profilePanel">CLOSE</button></div>
+  <p style="font-size:.75rem;opacity:.6">This first version stores profile data locally. It is not an online account and will not sync between devices.</p>
+ </div>
+</div>
+<!-- Story map -->
+<div id="chapterPanel" class="overlay hidden" style="z-index:25">
+ <div class="glass-card">
+  <div class="eyebrow">The lost kingdom · story map</div><h2>Six chapters. One buried truth.</h2>
+  <p id="chapterIntro">Choose an unlocked chapter to read its story.</p>
+  <div id="chapterGrid" class="chapter-grid"></div>
+  <div class="action-row"><button class="soft-btn closePanel" data-panel="chapterPanel">BACK</button></div>
+ </div>
+</div>
+<!-- Settings -->
+<div id="settingsPanel" class="overlay hidden" style="z-index:25">
+ <div class="glass-card">
+  <div class="eyebrow">Game settings</div><h2>Make the deep yours.</h2>
+  <label class="field">Sound<select id="soundSetting"><option value="on">On</option><option value="off">Off</option></select></label>
+  <label class="field">Look sensitivity<select id="sensSetting"><option value="0.7">Low</option><option value="1">Normal</option><option value="1.35">High</option></select></label>
+  <label class="field">Graphics<select id="qualitySetting"><option value="balanced">Balanced (recommended)</option><option value="low">Battery saver</option></select></label>
+  <div class="action-row"><button id="saveSettings" class="soft-btn primary">SAVE SETTINGS</button><button class="soft-btn closePanel" data-panel="settingsPanel">CLOSE</button></div>
+ </div>
+</div>
+<!-- Story chapter reader -->
+<div id="storyBeat"><div class="glass-card">
+ <div class="eyebrow" id="beatEyebrow">Chapter 01</div><h2 id="beatTitle">The Forgotten Shore</h2>
+ <p id="beatText"></p><p id="beatObjective" style="color:var(--gold)"></p>
+ <div class="action-row"><button id="beginChapter" class="soft-btn primary">BEGIN EXPLORATION</button><button id="closeStory" class="soft-btn">LATER</button></div>
+ </div></div>
+
+<!-- ===== HUD ===== -->
+<div id="hud">
+  <div class="top-tools"><button id="hudMap" class="tool-btn">MAP</button><button id="hudSettings" class="tool-btn">SETTINGS</button></div>
+  <div id="profileBadge">🐚 Explorer</div>
+  <div id="journal"><h2>JOURNAL <span id="count">0/5</span></h2><ul id="journalList"></ul></div>
+  <div id="compass"><div class="ring"><div id="arrow"></div></div><div id="compassText">…</div></div>
+  <div id="toast"></div>
+  <div id="keys">J journal · M mute · Esc release mouse</div>
+</div>
+
+<div id="fatal"><b id="fatalTitle">3D problem</b><span id="fatalMsg"></span><br><button id="fatalReload">RELOAD</button></div>
+
+<!-- ===== Mobile controls ===== -->
+<div id="touch">
+  <div id="stick"><div id="nub"></div></div>
+  <div id="btnUp" class="tbtn">▲</div>
+  <div id="btnDown" class="tbtn">▼</div>
+</div>
+
+<script>
+// Keep startup failures visible on mobile instead of leaving a silent blank scene.
+(function () {
+  function reportStartupError(message) {
+    const box = document.getElementById('loadinfo');
+    if (box) {
+      box.textContent = '3D startup failed: ' + String(message).slice(0, 180) + ' · Refresh to retry.';
+      box.style.opacity = '1'; box.style.color = '#ffb6a8'; box.style.maxWidth = ' min(90vw, 34rem)';
+      box.style.overflowWrap = 'anywhere';
+    }
+    const button = document.getElementById('goBtn');
+    if (button) { button.disabled = true; button.textContent = '3D FAILED TO LOAD'; }
+  }
+  window.addEventListener('error', function (e) {
+    if (e && (e.message || e.error)) reportStartupError(e.message || e.error);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    reportStartupError(e.reason && (e.reason.message || e.reason) || 'Unknown loading error');
+  });
+  window.__sunkenFatal = function (title, message) {
+    const box = document.getElementById('fatal'); if (!box) return;
+    document.getElementById('fatalTitle').textContent = title;
+    document.getElementById('fatalMsg').textContent = String(message || '').slice(0, 400);
+    box.classList.add('show');
+    const b = document.getElementById('fatalReload'); if (b) b.onclick = function () { location.reload(); };
+  };
+  window.__sunkenMarketStartupError = function (m) { reportStartupError(m); window.__sunkenFatal('3D startup failed', m); };
+})();
+</script>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader }     from 'three/addons/loaders/DRACOLoader.js';   // lets compressed (Draco) GLBs load
+import { MeshoptDecoder }  from 'three/addons/libs/meshopt_decoder.module.js'; // ...and meshopt-compressed ones
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
+
+/* ==========================================================================
+   SUNKEN MARKET
+   --------------------------------------------------------------------------
+   1. CONFIG          – tweak feel here
+   2. ASSET MANIFEST  – drop .glb files in /models, names below
+   3. FALLBACK MODELS – procedural stand-ins so the game runs with zero assets
+   4. ASSET LOADER    – loads GLB, auto-scales + re-pivots, falls back if missing
+   5. WORLD           – terrain, lighting, fog, particles, fish, layout
+   6. ITEMS + JOURNAL – the 5 collectibles and guidance
+   7. PLAYER + INPUT  – smooth swimming, third-person camera, touch controls
+   8. AUDIO, LOOP
+   ========================================================================== */
+
+/* ---------- 1. CONFIG ---------- */
+const IS_TOUCH = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+const CONFIG = {
+  moveSpeed:   7.0,    // top swim speed (units/sec)
+  accel:       3.0,    // how quickly you reach speed (higher = snappier)
+  drag:        1.4,    // how quickly you glide to a stop (lower = floatier)
+  camDist:     6.5,    // third-person distance
+  camFollow:   9.0,    // camera position smoothing
+  mouseSens:   0.0022,
+  touchSens:   0.0050,
+  worldRadius: 85,     // invisible circular boundary
+  ceiling:     30,     // max swim height
+  pickupRadius:2.8,
+  // Performance-first defaults: bloom and high-DPI rendering are expensive on phones.
+  bloom:       false,
+  // The world is built from built-in models before GLBs finish downloading, so downloaded GLBs were never
+  // placed in the scene. Leave off to save phone memory; add ?models=1 to the URL to test downloads.
+  detailedModels: /[?&]models=1/.test(location.search),
+  density:     IS_TOUCH ? 0.28 : 0.45 // scatter amount for coral/shells
+};
+
+/* ---------- 2. ASSET MANIFEST ----------
+   url      : where your GLB goes
+   size     : target size in world units for the LARGEST dimension (auto-scaled, so
+              whatever scale the generator exported at is fine)
+   pivot    : 'bottom' (sits on the ground) or 'center'
+   fallback : procedural stand-in used when the GLB is missing
+   Orientation expected: Y up, model FRONT faces +Z (only matters for the player). */
+const ASSETS = {
+  player:       { url:'models/player.glb',       size:2.0,  pivot:'center', fallback: buildPlayer },
+  coral_branch: { url:'models/coral_branch.glb', size:5.0,  pivot:'bottom', fallback: buildCoralBranch },
+  coral_brain:  { url:'models/coral_brain.glb',  size:2.5,  pivot:'bottom', fallback: buildCoralBrain },
+  coral_fan:    { url:'models/coral_fan.glb',    size:4.0,  pivot:'bottom', fallback: buildCoralFan },
+  shell:        { url:'models/shell.glb',        size:0.9,  pivot:'bottom', fallback: buildShell },
+  statue:       { url:'models/statue.glb',       size:7.0,  pivot:'bottom', fallback: buildStatue },
+  archway:      { url:'models/archway.glb',      size:13.0, pivot:'bottom', fallback: buildArchway },
+  platform:     { url:'models/platform.glb',     size:12.0, pivot:'bottom', fallback: buildPlatform },
+  // Collectibles
+  conch:        { url:'models/item_conch.glb',   size:1.6,  pivot:'center', fallback: buildConch },
+  pearl:        { url:'models/item_pearl.glb',   size:1.3,  pivot:'center', fallback: buildPearl },
+  compass:      { url:'models/item_compass.glb', size:1.5,  pivot:'center', fallback: buildCompass },
+  bell:         { url:'models/item_bell.glb',    size:1.7,  pivot:'center', fallback: buildBell },
+  lantern:      { url:'models/item_lantern.glb', size:1.8,  pivot:'center', fallback: buildLantern }
+};
+
+/* The five treasures. pos: [x, z, heightAboveGround]  (or y:'abs' for absolute height) */
+const ITEMS = [
+  { id:'conch',   model:'conch',   name:'Golden Conch',  color:0xffc66b, pos:[-38, 20, 1.4],
+    hint:'In the western coral garden, a spiral shell hums to itself.' },
+  { id:'pearl',   model:'pearl',   name:'Moon Pearl',    color:0xcfe8ff, pos:[ 30,-26, 9.0],
+    hint:'Above the eastern ruins, something round drifts toward the surface.' },
+  { id:'compass', model:'compass', name:'Brass Compass', color:0xffd06a, pos:[  0,-42, 1.2],
+    hint:'Under the old north gate, a needle still searches for home.' },
+  { id:'bell',    model:'bell',    name:'Sunken Bell',   color:0xffb86b, pos:[ 44, 12, 1.2],
+    hint:'Past the leaning statues to the east, a bell waits to be rung.' },
+  { id:'lantern', model:'lantern', name:'Glass Lantern', color:0x9ff5ff, pos:[  6,  4, 16 ],
+    hint:'High above the central plaza, a light that fell upward.' }
+];
+
+/* ---------- 3. FALLBACK MODELS (procedural stand-ins) ---------- */
+const mat = (c, e = 0x000000, ei = 0, r = 0.7, m = 0.05) =>
+  new THREE.MeshStandardMaterial({ color:c, emissive:e, emissiveIntensity:ei, roughness:r, metalness:m });
+const mesh = (geo, material, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, material); m.position.set(x, y, z); return m; };
+
+function buildCoralBranch() {
+  const g = new THREE.Group(), body = mat(0xff7aa8, 0xff3d86, 0.35, 0.6), tip = mat(0xffd0e4, 0xff9ac4, 1.2, 0.4);
+  for (let i = 0; i < 6; i++) {
+    const h = 1.6 + Math.random() * 1.4, a = (i / 6) * Math.PI * 2, lean = 0.25 + Math.random() * 0.45;
+    const b = mesh(new THREE.CylinderGeometry(0.06, 0.2, h, 7), body, 0, h / 2, 0);
+    const pivot = new THREE.Group(); pivot.add(b); pivot.rotation.set(Math.cos(a) * lean, 0, Math.sin(a) * lean);
+    const t = mesh(new THREE.SphereGeometry(0.12, 8, 8), tip, 0, h, 0); pivot.add(t); g.add(pivot);
+  }
+  return g;
+}
+function buildCoralBrain() {
+  const geo = new THREE.IcosahedronGeometry(1, 3), p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) { const k = 1 + 0.08 * Math.sin(p.getX(i) * 9) * Math.cos(p.getZ(i) * 9); p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.7, p.getZ(i) * k); }
+  geo.computeVertexNormals();
+  return new THREE.Group().add(mesh(geo, mat(0x6fe0c0, 0x2ad8b0, 0.35, 0.55), 0, 0.6, 0));
+}
+function buildCoralFan() {
+  const g = new THREE.Group(), m = mat(0xb48cff, 0x8a55ff, 0.5, 0.5); m.side = THREE.DoubleSide;
+  for (let i = 0; i < 3; i++) { const f = mesh(new THREE.CircleGeometry(1.2 - i * 0.2, 28), m, 0, 1.3, i * 0.12 - 0.12); f.rotation.y = (i - 1) * 0.35; g.add(f); }
+  g.add(mesh(new THREE.CylinderGeometry(0.07, 0.12, 0.8, 6), mat(0x7a55cc), 0, 0.4, 0));
+  return g;
+}
+function buildShell() {
+  const g = new THREE.Group(), m = mat(0xffd9e6, 0xff9ac0, 0.25, 0.35);
+  const s = mesh(new THREE.SphereGeometry(0.5, 14, 10), m, 0, 0.3, 0); s.scale.set(1, 0.6, 0.85); g.add(s);
+  for (let i = -2; i <= 2; i++) { const r = mesh(new THREE.TorusGeometry(0.36, 0.025, 5, 14, Math.PI), mat(0xffb3cf), i * 0.14, 0.3, 0); r.rotation.y = Math.PI / 2; g.add(r); }
+  return g;
+}
+function buildStatue() {
+  const g = new THREE.Group(), stone = mat(0x6e9a98, 0x1b4a4a, 0.25, 0.9), moss = mat(0x3f8f6a, 0x1a6a4a, 0.3, 0.9);
+  g.add(mesh(new THREE.BoxGeometry(2.2, 0.8, 2.2), stone, 0, 0.4, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.7, 1.0, 3.2, 10), stone, 0, 2.4, 0));
+  g.add(mesh(new THREE.SphereGeometry(0.62, 12, 10), stone, 0, 4.5, 0));
+  const arm = mesh(new THREE.CylinderGeometry(0.2, 0.25, 2.2, 8), stone, 0.9, 4.0, 0); arm.rotation.z = -0.9; g.add(arm);
+  g.add(mesh(new THREE.SphereGeometry(0.5, 8, 6), moss, -0.4, 1.0, 0.7));
+  return g;
+}
+function buildArchway() {
+  const g = new THREE.Group(), stone = mat(0x7aa5a2, 0x1b5a5a, 0.3, 0.85);
+  for (const s of [-1, 1]) {
+    g.add(mesh(new THREE.BoxGeometry(1.8, 8, 1.8), stone, s * 4.5, 4, 0));
+    g.add(mesh(new THREE.BoxGeometry(2.4, 0.6, 2.4), stone, s * 4.5, 0.3, 0));
+  }
+  const top = mesh(new THREE.TorusGeometry(4.5, 0.9, 8, 28, Math.PI), stone, 0, 8, 0); g.add(top);
+  g.add(mesh(new THREE.OctahedronGeometry(0.7), mat(0x9ff5ff, 0x6fe8ff, 2.0), 0, 13.3 - 0.2, 0));
+  return g;
+}
+function buildPlatform() {
+  const g = new THREE.Group(), stone = mat(0x6c9c9a, 0x1b4a4a, 0.25, 0.9);
+  g.add(mesh(new THREE.CylinderGeometry(6, 6.4, 1.4, 28), stone, 0, 0.7, 0));
+  g.add(mesh(new THREE.TorusGeometry(5.6, 0.1, 6, 40), mat(0x9ff5ff, 0x6fe8ff, 2.2), 0, 1.42, 0).rotateX(Math.PI / 2));
+  return g;
+}
+function buildConch() {
+  const g = new THREE.Group(), m = mat(0xffc24d, 0xff9a1f, 0.8, 0.3, 0.6);
+  for (let i = 0; i < 7; i++) { const r = 0.5 - i * 0.055, a = i * 0.9; g.add(mesh(new THREE.SphereGeometry(r, 12, 10), m, Math.cos(a) * 0.18 * (1 - i / 8), i * 0.2 - 0.6, Math.sin(a) * 0.18 * (1 - i / 8))); }
+  return g;
+}
+function buildPearl() { return new THREE.Group().add(mesh(new THREE.SphereGeometry(0.5, 24, 18), mat(0xeaf4ff, 0xaad4ff, 1.1, 0.15, 0.3))); }
+function buildCompass() {
+  const g = new THREE.Group(), brass = mat(0xd9a441, 0xaa7a20, 0.6, 0.3, 0.8);
+  g.add(mesh(new THREE.TorusGeometry(0.6, 0.08, 8, 28), brass));
+  g.add(mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 28), mat(0x203f50, 0x4fe0ff, 0.5), 0, 0, 0).rotateX(Math.PI / 2));
+  const n = mesh(new THREE.ConeGeometry(0.1, 0.9, 6), mat(0xff5a5a, 0xff3030, 1.2), 0, 0, 0.03); n.rotation.z = Math.PI / 2 - 0.5; g.add(n);
+  return g;
+}
+function buildBell() {
+  const pts = [[0.0,0.9],[0.18,0.85],[0.35,0.6],[0.5,0.2],[0.62,-0.2],[0.7,-0.5],[0.62,-0.55],[0.0,-0.5]].map(p => new THREE.Vector2(p[0], p[1]));
+  const g = new THREE.Group(); g.add(mesh(new THREE.LatheGeometry(pts, 24), mat(0xe0a24a, 0xb87820, 0.7, 0.3, 0.8)));
+  g.add(mesh(new THREE.SphereGeometry(0.14, 10, 8), mat(0x886030), 0, -0.45, 0)); return g;
+}
+function buildLantern() {
+  const g = new THREE.Group(), frame = mat(0x4a5a64, 0, 0, 0.5, 0.7);
+  g.add(mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.8, 12), mat(0xbff9ff, 0x7ff0ff, 2.0, 0.1), 0, 0, 0));
+  g.add(mesh(new THREE.ConeGeometry(0.42, 0.3, 12), frame, 0, 0.55, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.1, 12), frame, 0, -0.45, 0));
+  g.add(mesh(new THREE.TorusGeometry(0.15, 0.03, 6, 14), frame, 0, 0.8, 0));
+  return g;
+}
+function buildPlayer() {
+  // Little diver/spirit. FRONT faces +Z.
+  const g = new THREE.Group(), suit = mat(0x2a86c8, 0x1060a8, 0.3, 0.5), accent = mat(0xffd98a, 0xffb84a, 0.8, 0.4);
+  const body = mesh(new THREE.CapsuleGeometry(0.3, 0.7, 6, 12), suit); body.rotation.x = Math.PI / 2; g.add(body);
+  g.add(mesh(new THREE.SphereGeometry(0.34, 16, 12), mat(0xf5d6c0, 0, 0, 0.6), 0, 0.05, 0.55));
+  const visor = mesh(new THREE.SphereGeometry(0.28, 16, 12), mat(0x9ff5ff, 0x6fe8ff, 1.2, 0.1), 0, 0.08, 0.7);
+  visor.scale.set(1, 0.8, 0.5); g.add(visor);
+  for (const s of [-1, 1]) {
+    const arm = mesh(new THREE.CapsuleGeometry(0.08, 0.5, 4, 8), suit, s * 0.38, -0.05, 0.25); arm.rotation.x = 1.2; g.add(arm);
+    const fin = mesh(new THREE.ConeGeometry(0.2, 0.7, 4), accent, s * 0.14, -0.05, -0.85); fin.rotation.x = -Math.PI / 2; fin.scale.z = 0.3; g.add(fin);
+  }
+  return g;
+}
+
+/* ---------- 4. ASSET LOADER ----------
+   Loads a GLB, wraps it so (a) the largest dimension equals `size`, (b) the pivot is
+   bottom-center or center, and (c) any export scale/offset is ignored. */
+const templates = {};
+function normalize(root, size, pivot) {
+  const inner = new THREE.Group(); inner.add(root);
+  const box = new THREE.Box3().setFromObject(inner), dims = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  const s = size / Math.max(dims.x, dims.y, dims.z, 1e-4);
+  inner.scale.setScalar(s);
+  inner.position.set(-ctr.x * s, (pivot === 'bottom' ? -box.min.y : -ctr.y) * s, -ctr.z * s);
+  const wrapper = new THREE.Group(); wrapper.add(inner);
+  wrapper.userData.dims = { x: dims.x * s, y: dims.y * s, z: dims.z * s };  // plain numbers: survives clone()
+  return wrapper;
+}
+async function loadAssets(onProgress) {
+  const loader = new GLTFLoader(), keys = Object.keys(ASSETS); let custom = 0, i = 0;
+  const draco = new DRACOLoader(); draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/');
+  loader.setDRACOLoader(draco); loader.setMeshoptDecoder(MeshoptDecoder);
+  // Load all models in PARALLEL (big GLBs would take far too long one by one)
+  await Promise.all(keys.map(async key => {
+    const def = ASSETS[key]; let root, anims = [];
+    try {
+      const gltf = await Promise.race([
+        loader.loadAsync(def.url),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Model request timed out')), 12000))
+      ]);
+      root = gltf.scene; anims = gltf.animations || []; custom++;
+    } catch (e) { console.warn('GLB failed, using stand-in:', def.url, e); root = def.fallback(); }
+    const t = normalize(root, def.size, def.pivot); t.userData.anims = anims; templates[key] = t;
+    onProgress(++i, keys.length, custom);
+  }));
+  draco.dispose();
+  return custom;
+}
+/** Get a fresh copy of an asset, optionally scaled. */
+function spawn(key, mult = 1) {
+  const o = templates[key].clone(true); o.scale.multiplyScalar(mult);
+  const d = templates[key].userData.dims; o.userData.dims = { x: d.x * mult, y: d.y * mult, z: d.z * mult };
+  return o;
+}
+
+/* ---------- 5. WORLD ---------- */
+const FOG_COLOR = 0x0b4a5e;
+const renderer = new THREE.WebGLRenderer({
+  antialias: false,
+  powerPreference: 'high-performance',
+  alpha: false,
+  stencil: false,
+  depth: true
+});
+// A smaller drawing buffer is the biggest reliable win on high-DPI phones.
+const MAX_PIXEL_RATIO = IS_TOUCH ? 0.9 : 1.25;
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, MAX_PIXEL_RATIO));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+document.body.prepend(renderer.domElement);
+renderer.domElement.addEventListener('webglcontextlost', event => { event.preventDefault(); window.__sunkenFatal?.('Graphics context lost', 'The browser reset the 3D graphics (usually memory pressure on phones). Close other tabs, then reload.'); });
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(FOG_COLOR);
+scene.fog = new THREE.FogExp2(FOG_COLOR, 0.024);
+const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 400);
+
+// Lighting: soft sky/sea-floor hemisphere + a cool "sun" from above
+scene.add(new THREE.HemisphereLight(0x8fe3ff, 0x0b3b4f, 1.1));
+const sun = new THREE.DirectionalLight(0xc8f7ff, 1.6); sun.position.set(20, 60, 10); scene.add(sun);
+scene.add(new THREE.AmbientLight(0x3aa0b8, 0.25));
+
+// Seeded random so the world is identical every run
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+const rand = rng(1337), range = (a, b) => a + rand() * (b - a);
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+// Terrain height: flat plaza in the middle, rolling dunes, rising rim that walls in the basin
+function terrainH(x, z) {
+  const r = Math.hypot(x, z);
+  const dunes = Math.sin(x * 0.09) * 1.6 + Math.cos(z * 0.07) * 1.4 + Math.sin((x + z) * 0.2) * 0.5;
+  return dunes * smooth(14, 30, r) + smooth(42, 78, r) * 14;
+}
+// Platforms act as raised ground (so you glide over them rather than through them)
+const platforms = [];
+function floorAt(x, z) {
+  let h = terrainH(x, z);
+  for (const p of platforms) if (Math.hypot(x - p.x, z - p.z) < p.r) h = Math.max(h, p.top);
+  return h;
+}
+
+// Caustic texture: tileable web of light that drifts across the sea floor
+function makeCaustics() {
+  const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), img = g.createImageData(N, N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = x / N * Math.PI * 2, v = y / N * Math.PI * 2;
+    const s = Math.sin(u * 3 + Math.sin(v * 2)) + Math.sin(v * 4 + Math.sin(u * 3) * 1.2) + Math.sin((u + v) * 2 + Math.sin(u - v));
+    const val = Math.pow(1 - Math.abs(Math.sin(s * 1.3)), 8) * 255, i = (y * N + x) * 4;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = val; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(14, 14); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const caustics = makeCaustics();
+
+// Sea floor
+{
+  const geo = new THREE.PlaneGeometry(220, 220, 76, 76); geo.rotateX(-Math.PI / 2);
+  const p = geo.attributes.position, col = new Float32Array(p.count * 3), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i), h = terrainH(x, z); p.setY(i, h);
+    const r = Math.hypot(x, z), n = (Math.sin(x * .5) * Math.cos(z * .45) + 1) * .05;
+    c.setRGB(0.80 - n, 0.74 - n, 0.60 - n).lerp(new THREE.Color(0x1d6a74), smooth(35, 85, r) * 0.8);   // sand → deep teal at the rim
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: 0x6fe0ff, emissiveMap: caustics, emissiveIntensity: 0.45 });
+  scene.add(new THREE.Mesh(geo, m));
+}
+
+// God rays: translucent additive cones from the surface
+const shafts = [];
+for (let i = 0; i < 5; i++) {
+  const r = range(4, 9), m = new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.055, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const s = new THREE.Mesh(new THREE.ConeGeometry(r, 48, 10, 1, true), m);
+  const a = rand() * Math.PI * 2, d = range(0, 60); s.position.set(Math.cos(a) * d, 24, Math.sin(a) * d); s.userData.ph = rand() * 6; shafts.push(s); scene.add(s);
+}
+
+// Marine snow: drifting particles that wrap around the player
+const SNOW = IS_TOUCH ? 140 : 280, SNOW_BOX = 70, snowPos = new Float32Array(SNOW * 3);
+for (let i = 0; i < SNOW * 3; i++) snowPos[i] = (rand() - 0.5) * SNOW_BOX;
+const snowGeo = new THREE.BufferGeometry(); snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+const snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ color: 0xcffaff, size: 0.16, transparent: true, opacity: 0.7, depthWrite: false, sizeAttenuation: true }));
+snow.frustumCulled = false; scene.add(snow);
+
+// Glow sprite texture (used for item halos)
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c);
+})();
+
+// Collision: simple spheres (statues, pillars, big coral)
+const colliders = [];
+const footprints = []; // keep scatter away from landmarks
+function addPillar(x, z, baseY, height, r) { for (let y = baseY + r; y <= baseY + height; y += r * 1.4) colliders.push({ x, y, z, r }); }
+function place(o, x, z, { ry = 0, yOff = 0 } = {}) { o.position.set(x, floorAt(x, z) + yOff, z); o.rotation.y = ry; scene.add(o); return o; }
+const blocked = (x, z, pad = 0) => footprints.some(f => Math.hypot(x - f.x, z - f.z) < f.r + pad);
+
+/** Build the market layout (landmarks first, then scatter). */
+function buildWorld() {
+  // Central plaza + stall platforms
+  const plaza = spawn('platform', 1.5); const pd = plaza.userData.dims;
+  place(plaza, 0, 0); platforms.push({ x: 0, z: 0, r: pd.x * 0.48, top: pd.y }); footprints.push({ x: 0, z: 0, r: pd.x * 0.55 });
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + i * Math.PI / 2, x = Math.cos(a) * 24, z = Math.sin(a) * 24, st = spawn('platform', 0.6);
+    place(st, x, z, { ry: a }); const d = st.userData.dims;
+    platforms.push({ x, z, r: d.x * 0.48, top: floorAt(x, z) + d.y }); footprints.push({ x, z, r: d.x * 0.6 });
+  }
+  // Compass-hall platform under the north gate
+  { const x = 0, z = -42, h = spawn('platform', 0.5); place(h, x, z); const d = h.userData.dims;
+    platforms.push({ x, z, r: d.x * 0.48, top: floorAt(x, z) + d.y }); }
+
+  // Archways: south entrance and north gate (they face the plaza)
+  for (const [x, z] of [[0, 33], [0, -42]]) {
+    const arch = spawn('archway'), d = arch.userData.dims, ry = z > 0 ? 0 : 0;
+    place(arch, x, z, { ry }); const base = floorAt(x, z), off = d.x * 0.5 - d.x * 0.09;
+    for (const s of [-1, 1]) addPillar(x + s * off, z, base, d.y * 0.65, d.x * 0.09);
+    footprints.push({ x, z, r: d.x * 0.6 });
+  }
+
+  // Statue ring around the plaza
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2 + 0.2, x = Math.cos(a) * 13.5, z = Math.sin(a) * 13.5, s = spawn('statue', 0.9);
+    place(s, x, z, { ry: -a + Math.PI / 2 }); colliders.push({ x, y: floorAt(x, z) + 2.5, z, r: 1.3 }, { x, y: floorAt(x, z) + 5, z, r: 1.0 });
+    footprints.push({ x, z, r: 2.5 });
+  }
+  // Leaning statues in the east (Sunken Bell)
+  for (const [x, z, tilt] of [[38, 6, .22], [49, 6, -.2], [43, 19, .15]]) {
+    const s = spawn('statue', 1.1); place(s, x, z, { ry: rand() * 6 }); s.rotation.z = tilt;
+    colliders.push({ x, y: floorAt(x, z) + 3, z, r: 1.6 }); footprints.push({ x, z, r: 3.5 });
+  }
+  // Ruins near the Moon Pearl
+  for (const [x, z] of [[26, -22], [34, -30], [30, -36]]) { const s = spawn('statue', 1.3); place(s, x, z, { ry: rand() * 6 }); colliders.push({ x, y: floorAt(x, z) + 3.5, z, r: 1.8 }); footprints.push({ x, z, r: 3.5 }); }
+
+  // Coral garden (denser) around the Golden Conch, then scattered coral everywhere
+  const coralKeys = ['coral_branch', 'coral_brain', 'coral_fan'];
+  const addCoral = (x, z, sizeMul) => {
+    const c = spawn(coralKeys[Math.floor(rand() * 3)], sizeMul); place(c, x, z, { ry: rand() * 6.28 });
+    if (c.userData.dims.y > 5) colliders.push({ x, y: floorAt(x, z) + 2, z, r: c.userData.dims.x * 0.22 });
+  };
+  for (let i = 0; i < 8 * CONFIG.density; i++) { const a = rand() * 6.28, d = range(4, 12); addCoral(-38 + Math.cos(a) * d, 20 + Math.sin(a) * d, range(0.9, 1.9)); }
+  for (let i = 0; i < 28 * CONFIG.density; i++) {
+    const a = rand() * 6.28, d = range(17, 74), x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!blocked(x, z, 2)) addCoral(x, z, range(0.5, 1.6));
+  }
+  // Shells on the floor
+  for (let i = 0; i < 36 * CONFIG.density; i++) {
+    const a = rand() * 6.28, d = range(3, 70), x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!blocked(x, z, 0)) place(spawn('shell', range(0.6, 1.4)), x, z, { ry: rand() * 6.28 });
+  }
+}
+
+// Ambient fish schools (cheap, but they make the place feel alive)
+const fishSchools = [];
+function buildFish() {
+  const geo = new THREE.ConeGeometry(0.12, 0.55, 6); geo.rotateX(Math.PI / 2);
+  const cfgs = [[0xffa44d, [-10, 8, 10], 14, 5], [0x7fe8ff, [22, 6, -8], 12, 5], [0xff7ab8, [-30, 10, -25], 10, 4]];
+  for (const [color, ctr, R, n] of cfgs) {
+    const m = mat(color, color, 0.9, 0.4), s = { ctr, R, fish: [] };
+    for (let i = 0; i < n; i++) { const f = new THREE.Mesh(geo, m); f.userData = { ph: rand() * 6.28, sp: range(0.18, 0.3), rr: R * range(0.7, 1.2), yy: range(-2, 2) }; scene.add(f); s.fish.push(f); }
+    fishSchools.push(s);
+  }
+}
+const fishPos = (s, f, t) => { const u = f.userData, a = t * u.sp + u.ph; return [s.ctr[0] + Math.cos(a) * u.rr, s.ctr[1] + u.yy + Math.sin(a * 2) * 0.8, s.ctr[2] + Math.sin(a) * u.rr]; };
+function updateFish(t) {
+  for (const s of fishSchools) for (const f of s.fish) {
+    const p = fishPos(s, f, t), q = fishPos(s, f, t + 0.1); f.position.set(...p); f.lookAt(q[0], q[1], q[2]);
+  }
+}
+
+/* ---------- 6. ITEMS + JOURNAL ---------- */
+const itemObjs = [];
+let collected = 0, startTime = 0, won = false;
+const $ = id => document.getElementById(id);
+
+const SAVE_KEY = 'sunkenMarket_explorer_v1';
+const CHAPTERS = [
+ {title:'The Forgotten Shore',place:'The signal',story:'A pale blue pulse flickers beneath the waves. Your old dive radio catches a voice repeating five names. The map in your hand is older than the ruins ahead. Someone wants the lost treasures returned.',objective:'Recover the five market relics and discover who sent the signal.'},
+ {title:'Coral Gardens',place:'A living archive',story:'The coral is growing around the remains of a library. Tiny lights move between the branches like memories trying to escape. An inscription warns: the kingdom did not fall to the sea. It chose to hide.',objective:'Explore the gardens and search for the first memory fragment.'},
+ {title:'The Sunken Market',place:'Voices in the stalls',story:'The market stalls are still arranged for a trading day that never ended. A merchant’s ledger tells of a bargain made to save the city. The price was every citizen’s memory.',objective:'Read the merchant records and trace the forbidden bargain.'},
+ {title:'The Drowned Palace',place:'The royal secret',story:'Beyond the market stands a palace split by the pressure of the deep. The royal crest matches the symbol on your radio. The last queen left a message for whoever would come looking.',objective:'Reach the palace archive and uncover the queen’s final message.'},
+ {title:'The Abyss',place:'Below the light',story:'The signal leads down, far beneath the ruins. Here the water is cold and sound seems to disappear. Something enormous moves beyond the edge of your lantern. The kingdom’s secret is still alive.',objective:'Follow the signal into the dark and face what remains.'},
+ {title:'The Lost Kingdom',place:'A memory restored',story:'The final chamber opens. The truth is not a monster or a curse, but a choice made by a civilisation that feared what it had become. Now the memories are yours to return—or keep.',objective:'Make the final choice and decide what the kingdom will be remembered for.'}
+];
+let saveData = {name:'',emblem:'🐚',unlocked:1,completed:[],sound:'on',sensitivity:1,quality:'balanced'};
+function loadSave(){try{saveData={...saveData,...JSON.parse(localStorage.getItem(SAVE_KEY)||'{}')};}catch(e){}}
+function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(saveData));}catch(e){}}
+function refreshIdentity(){
+ $('welcomeLine').textContent = saveData.name ? `${saveData.emblem} Welcome back, ${saveData.name}` : 'Create your explorer profile to begin.';
+ $('profileBadge').textContent = `${saveData.emblem} ${saveData.name||'Explorer'}`;
+ $('playerName').value=saveData.name||''; $('playerEmblem').value=saveData.emblem||'🐚';
+}
+function showPanel(id){$(id).classList.remove('hidden');}
+function hidePanel(id){$(id).classList.add('hidden');}
+function renderChapters(){
+ $('chapterGrid').innerHTML='';
+ CHAPTERS.forEach((c,i)=>{
+  const unlocked=i<saveData.unlocked;
+  const b=document.createElement('button'); b.className='chapter'; b.disabled=!unlocked;
+  b.innerHTML=`<strong>${String(i+1).padStart(2,'0')} · ${c.title} ${saveData.completed.includes(i+1)?'✓':''}</strong><small>${unlocked?c.place:'🔒 Complete the previous chapter to unlock'}</small>`;
+  if(unlocked)b.onclick=()=>{hidePanel('chapterPanel');openStory(i);};
+  $('chapterGrid').appendChild(b);
+ });
+}
+let selectedChapter=1;
+function openStory(index){
+ selectedChapter=index+1; const c=CHAPTERS[index];
+ $('beatEyebrow').textContent=`CHAPTER ${String(index+1).padStart(2,'0')} · ${c.place}`;
+ $('beatTitle').textContent=c.title; $('beatText').textContent=c.story; $('beatObjective').textContent='MISSION: '+c.objective;
+ $('storyBeat').classList.add('show');
+}
+function closeStory(){ $('storyBeat').classList.remove('show'); }
+function completeCurrentChapter(){
+ if(!saveData.completed.includes(selectedChapter))saveData.completed.push(selectedChapter);
+ saveData.unlocked=Math.max(saveData.unlocked,Math.min(CHAPTERS.length,selectedChapter+1));persist();renderChapters();
+}
+function applySettings(){
+ if(saveData.sound==='off')muted=true;
+ CONFIG.mouseSens=0.0022*Number(saveData.sensitivity||1);
+ CONFIG.touchSens=0.005*Number(saveData.sensitivity||1);
+}
+function initMeta(){
+ loadSave();refreshIdentity();renderChapters();applySettings();
+ $('profileOpen').onclick=()=>showPanel('profilePanel');
+ $('chaptersOpen').onclick=()=>{renderChapters();showPanel('chapterPanel');};
+ $('settingsOpen').onclick=()=>showPanel('settingsPanel');
+ $('hudMap').onclick=()=>{renderChapters();showPanel('chapterPanel');};
+ $('hudSettings').onclick=()=>showPanel('settingsPanel');
+ document.querySelectorAll('.closePanel').forEach(b=>b.onclick=()=>hidePanel(b.dataset.panel));
+ $('saveProfile').onclick=()=>{
+  const n=$('playerName').value.trim();if(!n){$('playerName').focus();return;}
+  saveData.name=n;saveData.emblem=$('playerEmblem').value;persist();refreshIdentity();hidePanel('profilePanel');toast(`Welcome to the deep, ${n}.`);
+ };
+ $('soundSetting').value=saveData.sound;$('sensSetting').value=String(saveData.sensitivity||1);$('qualitySetting').value=saveData.quality||'balanced';
+ $('saveSettings').onclick=()=>{
+  saveData.sound=$('soundSetting').value;saveData.sensitivity=Number($('sensSetting').value);saveData.quality=$('qualitySetting').value;persist();applySettings();
+  if(saveData.quality==='low'){renderer.setPixelRatio(Math.min(devicePixelRatio,0.7));}
+  else renderer.setPixelRatio(Math.min(devicePixelRatio,IS_TOUCH?0.9:1.25));
+  hidePanel('settingsPanel');toast('Settings saved.');
+ };
+ $('closeStory').onclick=closeStory;
+ $('beginChapter').onclick=()=>{
+  closeStory();
+  if(selectedChapter===1){$('start').classList.add('hidden');$('hud').classList.add('on');running=true;startTime=performance.now();cam.yaw=0;cam.pitch=.15;startAudio();if(!IS_TOUCH)renderer.domElement.requestPointerLock?.();toast('Follow your journal. The signal is waiting.');}
+  else toast('This chapter is unlocked in your story map. Its full mission is coming in the next content update.');
+ };
+}
+
+
+function buildItems() {
+  for (const it of ITEMS) {
+    const root = new THREE.Group(), model = spawn(it.model); root.add(model);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: it.color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    halo.scale.setScalar(5); root.add(halo);
+    const light = new THREE.PointLight(it.color, 5, 9, 1.8); root.add(light);
+    // Faint vertical beam, visible through the fog from moderate distance (gentle guidance)
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.5, 22, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: it.color, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
+    beam.position.y = 11; root.add(beam);
+    const [x, z, h] = it.pos; const y = floorAt(x, z) + h; root.position.set(x, y, z); scene.add(root);
+    itemObjs.push({ ...it, root, model, halo, light, beam, baseY: y, got: false, t0: rand() * 6 });
+  }
+  const ul = $('journalList');
+  ul.innerHTML = ITEMS.map(i => `<li id="j-${i.id}"><span class="nm">◇ ${i.name}</span><span class="hint">${i.hint}</span></li>`).join('');
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 3200); }
+
+function updateItems(t, dt) {
+  for (const it of itemObjs) {
+    if (it.got) {              // collect animation: swell + fade, then remove
+      it.fade = (it.fade ?? 1) - dt * 1.5;
+      if (it.fade <= 0) { scene.remove(it.root); continue; }
+      it.root.scale.setScalar(1 + (1 - it.fade) * 1.5); it.halo.material.opacity = it.fade; it.light.intensity = 5 * it.fade; it.beam.visible = false; continue;
+    }
+    it.model.rotation.y = t * 0.8 + it.t0; it.model.position.y = Math.sin(t * 1.4 + it.t0) * 0.25;
+    it.halo.material.opacity = 0.6 + Math.sin(t * 2 + it.t0) * 0.2;
+    if (!won && player.pos.distanceTo(it.root.position) < CONFIG.pickupRadius) collect(it);
+  }
+}
+function collect(it) {
+  it.got = true; collected++; chime();
+  $('j-' + it.id).classList.add('done'); $('count').textContent = `${collected}/${ITEMS.length}`;
+  toast(`${it.name} recovered · memory ${collected}/${ITEMS.length}`);
+  if (collected === ITEMS.length) setTimeout(win, 2200);
+}
+function win() {
+  won = true; document.exitPointerLock?.();
+  const secs = Math.round((performance.now() - startTime) / 1000), m = Math.floor(secs / 60), s = String(secs % 60).padStart(2, '0');
+  completeCurrentChapter();
+  $('winText').textContent = `The five relics answer the signal. A forgotten memory returns to the sea. Time: ${m}:${s}. Chapter ${selectedChapter} complete.`;
+  $('nextChapter').textContent = selectedChapter < CHAPTERS.length ? 'READ NEXT CHAPTER' : 'THE KINGDOM REMEMBERS';
+  $('nextChapter').onclick = () => {
+    $('win').classList.add('hidden'); $('hud').classList.remove('on');
+    if(selectedChapter < CHAPTERS.length) openStory(selectedChapter);
+    else { $('winText').textContent='You have reached the end of the current story arc.'; $('win').classList.remove('hidden'); }
+  };
+  $('win').classList.remove('hidden'); $('hud').classList.remove('on');
+}
+
+/* Compass: points to nearest uncollected item, with a soft "how close" read-out */
+function updateCompass() {
+  let best = null, bd = 1e9;
+  for (const it of itemObjs) if (!it.got) { const d = it.root.position.distanceTo(player.pos); if (d < bd) { bd = d; best = it; } }
+  if (!best) return;
+  const dx = best.root.position.x - player.pos.x, dz = best.root.position.z - player.pos.z;
+  const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
+  $('arrow').style.transform = `rotate(${Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz)}rad)`;
+  const dy = best.root.position.y - player.pos.y;
+  const word = bd < 12 ? 'very close' : bd < 28 ? 'close' : bd < 55 ? 'far' : 'distant';
+  $('compassText').textContent = word + (dy > 5 ? ' · above' : dy < -5 ? ' · below' : '');
+}
+
+/* ---------- 7. PLAYER + INPUT ---------- */
+const player = { pos: new THREE.Vector3(0, 5, 44), vel: new THREE.Vector3(), rig: new THREE.Group(), model: null, mixer: null };
+const cam = { yaw: 0, pitch: 0.12, pos: new THREE.Vector3() };
+const keys = {}; const touch = { x: 0, y: 0, up: false, down: false };
+
+function buildPlayerRig() {
+  player.model = templates.player; player.rig.add(player.model); player.rig.position.copy(player.pos); scene.add(player.rig);
+  const anims = player.model.userData.anims;
+  if (anims && anims.length) { player.mixer = new THREE.AnimationMixer(player.model); player.mixer.clipAction(anims[0]).play(); }
+  player.rig.rotation.y = Math.PI;                        // start facing -Z (toward the plaza)
+  const glow = new THREE.PointLight(0x9ff5ff, 5, 10, 1.8); glow.position.set(0, 0.5, 0.5); player.rig.add(glow);  // personal lantern
+}
+
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
+  if (e.code === 'KeyJ') $('journal').classList.toggle('collapsed');
+  if (e.code === 'KeyM') toggleMute();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+// Mouse look (pointer lock when available; click-drag as a fallback)
+let dragging = false;
+function look(dx, dy, sens) { cam.yaw -= dx * sens; cam.pitch = Math.max(-1.25, Math.min(1.25, cam.pitch - dy * sens)); }
+addEventListener('mousemove', e => { if (document.pointerLockElement || dragging) look(e.movementX, e.movementY, CONFIG.mouseSens); });
+renderer.domElement.addEventListener('mousedown', () => { dragging = true; if (running && !won) renderer.domElement.requestPointerLock?.(); });
+addEventListener('mouseup', () => { dragging = false; });
+
+// Touch: virtual stick (left), drag-to-look (anywhere else), hold buttons for up/down
+const stick = $('stick'), nub = $('nub'); let stickId = null, lookId = null, lastLook = null, stickC = null;
+const setBtn = (id, key) => { const b = $(id); const on = v => e => { e.preventDefault(); touch[key] = v; b.classList.toggle('held', v); };
+  b.addEventListener('touchstart', on(true), { passive: false }); b.addEventListener('touchend', on(false)); b.addEventListener('touchcancel', on(false)); };
+setBtn('btnUp', 'up'); setBtn('btnDown', 'down');
+stick.addEventListener('touchstart', e => { e.preventDefault(); const t = e.changedTouches[0]; stickId = t.identifier; const r = stick.getBoundingClientRect(); stickC = [r.left + r.width / 2, r.top + r.height / 2]; moveStick(t); }, { passive: false });
+function moveStick(t) {
+  let dx = (t.clientX - stickC[0]) / 55, dy = (t.clientY - stickC[1]) / 55; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+  touch.x = dx; touch.y = -dy; nub.style.transform = `translate(${dx * 40}px, ${dy * 40}px)`;
+}
+renderer.domElement.addEventListener('touchstart', e => { for (const t of e.changedTouches) if (lookId === null) { lookId = t.identifier; lastLook = [t.clientX, t.clientY]; } }, { passive: true });
+addEventListener('touchmove', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === stickId) moveStick(t);
+    else if (t.identifier === lookId) { look(t.clientX - lastLook[0], t.clientY - lastLook[1], CONFIG.touchSens); lastLook = [t.clientX, t.clientY]; }
+  }
+}, { passive: true });
+const endTouch = e => { for (const t of e.changedTouches) {
+  if (t.identifier === stickId) { stickId = null; touch.x = touch.y = 0; nub.style.transform = ''; }
+  if (t.identifier === lookId) lookId = null; } };
+addEventListener('touchend', endTouch); addEventListener('touchcancel', endTouch);
+
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _want = new THREE.Vector3(), _d = new THREE.Vector3();
+function updatePlayer(dt, t) {
+  // Input → desired direction relative to the camera (forward follows pitch, so looking up and pressing W swims up)
+  const fwd = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) + touch.y;
+  const str = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + touch.x;
+  const vert = (keys.Space || touch.up ? 1 : 0) - (keys.ShiftLeft || keys.ShiftRight || touch.down ? 1 : 0);
+  const cp = Math.cos(cam.pitch);
+  _f.set(-Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp);
+  _r.set(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+  _want.set(0, 0, 0).addScaledVector(_f, fwd).addScaledVector(_r, str); _want.y += vert;
+  const has = _want.lengthSq() > 0.001; if (_want.length() > 1) _want.normalize();
+  _want.multiplyScalar(CONFIG.moveSpeed);
+
+  // Exponential smoothing = frame-rate independent, gives that gentle ease-in / glide-out
+  const k = 1 - Math.exp(-(has ? CONFIG.accel : CONFIG.drag) * dt);
+  player.vel.lerp(_want, k);
+  player.pos.addScaledVector(player.vel, dt);
+
+  // Soft collisions
+  for (const c of colliders) {
+    _d.set(player.pos.x - c.x, player.pos.y - c.y, player.pos.z - c.z); const dist = _d.length(), min = c.r + 0.6;
+    if (dist < min && dist > 1e-4) { _d.multiplyScalar(1 / dist); player.pos.addScaledVector(_d, min - dist); const vn = player.vel.dot(_d); if (vn < 0) player.vel.addScaledVector(_d, -vn); }
+  }
+  // Floor, ceiling and basin wall
+  const floor = floorAt(player.pos.x, player.pos.z) + 0.7;
+  if (player.pos.y < floor) { player.pos.y = floor; if (player.vel.y < 0) player.vel.y *= 0.2; }
+  if (player.pos.y > CONFIG.ceiling) { player.pos.y = CONFIG.ceiling; player.vel.y = Math.min(0, player.vel.y); }
+  const hr = Math.hypot(player.pos.x, player.pos.z);
+  if (hr > CONFIG.worldRadius) { const s = CONFIG.worldRadius / hr; player.pos.x *= s; player.pos.z *= s; }
+
+  // Visuals: turn toward travel direction, tilt with vertical motion, idle bob
+  player.rig.position.copy(player.pos);
+  const hs = Math.hypot(player.vel.x, player.vel.z);
+  if (hs > 0.6) {
+    const target = Math.atan2(player.vel.x, player.vel.z); let d = target - player.rig.rotation.y;
+    d = Math.atan2(Math.sin(d), Math.cos(d)); player.rig.rotation.y += d * (1 - Math.exp(-6 * dt));
+  }
+  const tilt = THREE.MathUtils.clamp(-player.vel.y / CONFIG.moveSpeed * 0.7, -0.7, 0.7);
+  player.model.rotation.x += (tilt - player.model.rotation.x) * (1 - Math.exp(-6 * dt));
+  player.model.position.y = Math.sin(t * 2.2) * 0.06;
+  player.mixer?.update(dt);
+}
+
+const _camTarget = new THREE.Vector3();
+const _camDesired = new THREE.Vector3();
+function updateCamera(dt) {
+  const cp = Math.cos(cam.pitch), target = _camTarget.set(player.pos.x, player.pos.y + 0.9, player.pos.z);
+  const desired = _camDesired.set(
+    target.x + Math.sin(cam.yaw) * cp * CONFIG.camDist,
+    target.y - Math.sin(cam.pitch) * CONFIG.camDist,
+    target.z + Math.cos(cam.yaw) * cp * CONFIG.camDist
+  );
+  desired.y = Math.max(desired.y, floorAt(desired.x, desired.z) + 0.8);          // don't dip below the sand
+  cam.pos.lerp(desired, 1 - Math.exp(-CONFIG.camFollow * dt));
+  camera.position.copy(cam.pos); camera.lookAt(target);
+  // A hint of FOV widening with speed sells the glide
+  const sp = player.vel.length() / CONFIG.moveSpeed; const targetFov = 65 + sp * 7;
+  const nextFov = camera.fov + (targetFov - camera.fov) * (1 - Math.exp(-3 * dt));
+  if (Math.abs(nextFov - camera.fov) > 0.04) {
+    camera.fov = nextFov;
+    camera.updateProjectionMatrix();
+  }
+}
+
+/* ---------- 8. AUDIO ---------- */
+let actx = null, master = null, muted = false;
+function startAudio() {
+  try {
+    actx = new (window.AudioContext || window.webkitAudioContext)(); master = actx.createGain(); master.gain.value = muted ? 0 : 0.7; master.connect(actx.destination);
+    // Brown-noise "ocean hum" through a slowly breathing low-pass
+    const len = actx.sampleRate * 2, buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0); let last = 0;
+    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+    const src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+    const g = actx.createGain(); g.gain.value = 0.5;
+    const lfo = actx.createOscillator(), lg = actx.createGain(); lfo.frequency.value = 0.07; lg.gain.value = 160; lfo.connect(lg).connect(lp.frequency); lfo.start();
+    src.connect(lp).connect(g).connect(master); src.start();
+    setInterval(() => { if (!muted && !won) bubble(); }, 4500);
+  } catch (e) { /* audio is optional */ }
+}
+function blip(f0, f1, dur, vol, type = 'sine', when = 0) {
+  if (!actx) return; const t = actx.currentTime + when, o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.05);
+}
+const bubble = () => blip(300 + Math.random() * 200, 900 + Math.random() * 400, 0.18, 0.05);
+const chime = () => [523, 659, 784, 1047].forEach((f, i) => blip(f, f, 1.2, 0.12, 'sine', i * 0.11));
+function toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.7; }
+
+/* ---------- LOOP + BOOT ---------- */
+let composer = null, running = false;
+function setupComposer() {
+  if (!CONFIG.bloom) return;
+  composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.7, 0.72));
+  composer.addPass(new OutputPass());
+}
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer?.setSize(innerWidth, innerHeight);
+});
+
+const clock = new THREE.Clock();
+let lastTouchFrame = 0;
+let renderedFrames = 0, lastSeenFrames = -1, frameFailed = false;
+function frame(now = 0) {
+  requestAnimationFrame(frame);
+  try { frameBody(now); renderedFrames++; }
+  catch (e) {
+    console.error('Frame failed:', e);
+    if (!frameFailed) { frameFailed = true; window.__sunkenFatal?.('3D frame error', (e && (e.stack || e.message)) || e); }
+  }
+}
+setInterval(() => {   // watchdog: running but nothing drawn for 3s while the tab is visible
+  if (document.visibilityState !== 'visible' || frameFailed) return;
+  if (renderer.getContext().isContextLost()) { frameFailed = true; window.__sunkenFatal?.('Graphics context lost', 'The browser reset the 3D graphics. Close other tabs, then reload.'); return; }
+  if (running && renderedFrames === lastSeenFrames) { frameFailed = true; window.__sunkenFatal?.('3D stopped rendering', 'No frames were drawn for 3 seconds.'); }
+  lastSeenFrames = renderedFrames;
+}, 3000);
+function frameBody(now) {
+  // Keep lower-powered touch devices near 30 FPS instead of repeatedly rendering
+  // frames they cannot sustain. Desktop remains uncapped.
+  if (IS_TOUCH && now - lastTouchFrame < 1000 / 30) return;
+  if (IS_TOUCH) lastTouchFrame = now;
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  if (running) { updatePlayer(dt, t); updateCamera(dt); updateItems(t, dt); if (!won) updateCompass(); }
+  else { // slow cinematic drift behind the start screen
+    cam.yaw += dt * 0.05; updateCamera(dt);
+  }
+  // Ambient motion
+  caustics.offset.set(t * 0.012, t * 0.008);
+  for (const s of shafts) { s.rotation.z = Math.sin(t * 0.15 + s.userData.ph) * 0.06; s.material.opacity = 0.045 + Math.sin(t * 0.4 + s.userData.ph) * 0.02; }
+  const sp = snowPos, px = player.pos.x, py = player.pos.y, pz = player.pos.z, H = SNOW_BOX / 2;
+  for (let i = 0; i < SNOW; i++) {
+    const j = i * 3; sp[j + 1] -= dt * 0.15; sp[j] += Math.sin(t * 0.3 + i) * dt * 0.1;
+    if (sp[j] - px > H) sp[j] -= SNOW_BOX; else if (sp[j] - px < -H) sp[j] += SNOW_BOX;
+    if (sp[j + 1] - py > H) sp[j + 1] -= SNOW_BOX; else if (sp[j + 1] - py < -H) sp[j + 1] += SNOW_BOX;
+    if (sp[j + 2] - pz > H) sp[j + 2] -= SNOW_BOX; else if (sp[j + 2] - pz < -H) sp[j + 2] += SNOW_BOX;
+  }
+  snowGeo.attributes.position.needsUpdate = true;
+  updateFish(t);
+  composer ? composer.render() : renderer.render(scene, camera);
+}
+
+function prepareFallbackTemplates() {
+  // Build every stand-in synchronously so the playable world never waits for network assets.
+  for (const [key, def] of Object.entries(ASSETS)) {
+    const root = def.fallback();
+    const template = normalize(root, def.size, def.pivot);
+    template.userData.anims = [];
+    templates[key] = template;
+  }
+}
+
+async function boot() {
+  initMeta();
+  if (IS_TOUCH) { document.body.classList.add('is-touch'); $('journal').classList.add('collapsed'); }
+  $('journal').addEventListener('click', () => $('journal').classList.toggle('collapsed'));
+  const info = $('loadinfo');
+
+  // Render the complete procedural world first. GLB downloads happen in the background.
+  prepareFallbackTemplates();
+  buildWorld(); buildFish(); buildItems(); buildPlayerRig(); setupComposer();
+  cam.pos.set(0, 12, 60); camera.position.copy(cam.pos);
+  const btn = $('goBtn'); btn.disabled = false; btn.textContent = 'DIVE IN';
+  btn.onclick = () => {
+    if(!saveData.name){showPanel('profilePanel');toast('Choose your explorer name first.');return;}
+    openStory(0);
+  };
+  info.textContent = 'The market is ready. Loading detailed models in the background…';
+  frame();
+
+  // A failed or slow model request can no longer prevent the game from starting.
+  if (!CONFIG.detailedModels) { info.textContent = 'The market is ready.'; return; }
+  loadAssets((i, n, c) => {
+    info.textContent = i === n
+      ? (c ? `${c}/${n} detailed models loaded. You can dive in.` : 'Using built-in 3D models. You can dive in.')
+      : `Market ready · loading detailed models ${i}/${n}`;
+  }).catch(error => {
+    console.warn('Optional model downloads failed; procedural models remain active.', error);
+    info.textContent = 'Market ready · using built-in 3D models.';
+  });
+}
+boot().catch(error => {
+  console.error('Sunken Market boot failed:', error);
+  window.__sunkenMarketStartupError?.(error?.stack || error?.message || error);
+});
+</script>
+</body>
+</html>
